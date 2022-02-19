@@ -175,9 +175,12 @@ async function resolveAddresses(resolver: Signer | Provider, value: any, paramTy
 
 async function populateTransaction(contract: Contract, fragment: FunctionFragment, args: Array<any>): Promise<PopulatedTransaction> {
     // If an extra argument is given, it is overrides
+    var fnSignature = null;
     let overrides: CallOverrides = { };
     if (args.length === fragment.inputs.length + 1 && typeof(args[args.length - 1]) === "object") {
         overrides = shallowCopy(args.pop());
+    }else if (args.length === fragment.inputs.length + 1 && typeof (args[args.length - 1]) === "string") {
+        fnSignature = args.pop();
     }
 
     // Make sure the parameter count matches
@@ -222,7 +225,12 @@ async function populateTransaction(contract: Contract, fragment: FunctionFragmen
     });
 
     // The ABI coded transaction
-    const data = contract.interface.encodeFunctionData(fragment, resolved.args);
+    var data = null;
+    if (fnSignature) {
+        data = contract.interface.encodeFunctionDataSign(fragment, resolved.args, fnSignature);
+    } else {
+        data = contract.interface.encodeFunctionData(fragment, resolved.args);
+    }
     const tx: PopulatedTransaction = {
       data: data,
       to: resolved.address

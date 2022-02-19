@@ -52,12 +52,12 @@ export class Indexed extends Description<Indexed> {
 }
 
 const BuiltinErrors: Record<string, { signature: string, inputs: Array<string>, name: string, reason?: boolean }> = {
-    "0x08c379a0": { signature: "Error(string)", name: "Error", inputs: [ "string" ], reason: true },
-    "0x4e487b71": { signature: "Panic(uint256)", name: "Panic", inputs: [ "uint256" ] }
+    "0x08c379a0": { signature: "Error(string)", name: "Error", inputs: ["string"], reason: true },
+    "0x4e487b71": { signature: "Panic(uint256)", name: "Panic", inputs: ["uint256"] }
 }
 
 function wrapAccessError(property: string, error: Error): Error {
-    const wrap = new Error(`deferred error during ABI decoding triggered accessing ${ property }`);
+    const wrap = new Error(`deferred error during ABI decoding triggered accessing ${property}`);
     (<any>wrap).error = error;
     return wrap;
 }
@@ -78,10 +78,10 @@ function checkNames(fragment: Fragment, type: "input" | "output", params: Array<
 export class Interface {
     readonly fragments: ReadonlyArray<Fragment>;
 
-    readonly errors: { [ name: string ]: ErrorFragment };
-    readonly events: { [ name: string ]: EventFragment };
-    readonly functions: { [ name: string ]: FunctionFragment };
-    readonly structs: { [ name: string ]: any };
+    readonly errors: { [name: string]: ErrorFragment };
+    readonly events: { [name: string]: EventFragment };
+    readonly functions: { [name: string]: FunctionFragment };
+    readonly structs: { [name: string]: any };
 
     readonly deploy: ConstructorFragment;
 
@@ -92,8 +92,8 @@ export class Interface {
     constructor(fragments: string | ReadonlyArray<Fragment | JsonFragment | string>) {
         logger.checkNew(new.target, Interface);
 
-        let abi: ReadonlyArray<Fragment | JsonFragment | string> = [ ];
-        if (typeof(fragments) === "string") {
+        let abi: ReadonlyArray<Fragment | JsonFragment | string> = [];
+        if (typeof (fragments) === "string") {
             abi = JSON.parse(fragments);
         } else {
             abi = fragments;
@@ -105,14 +105,14 @@ export class Interface {
 
         defineReadOnly(this, "_abiCoder", getStatic<() => AbiCoder>(new.target, "getAbiCoder")());
 
-        defineReadOnly(this, "functions", { });
-        defineReadOnly(this, "errors", { });
-        defineReadOnly(this, "events", { });
-        defineReadOnly(this, "structs", { });
+        defineReadOnly(this, "functions", {});
+        defineReadOnly(this, "errors", {});
+        defineReadOnly(this, "events", {});
+        defineReadOnly(this, "structs", {});
 
         // Add all fragments by their signature
         this.fragments.forEach((fragment) => {
-            let bucket: { [ name: string ]: Fragment } = null;
+            let bucket: { [name: string]: Fragment } = null;
             switch (fragment.type) {
                 case "constructor":
                     if (this.deploy) {
@@ -168,7 +168,7 @@ export class Interface {
 
         // We need to re-bundle the JSON fragments a bit
         if (format === FormatTypes.json) {
-             return JSON.stringify(abi.map((j) => JSON.parse(j)));
+            return JSON.stringify(abi.map((j) => JSON.parse(j)));
         }
 
         return abi;
@@ -292,7 +292,7 @@ export class Interface {
 
     // Get the sighash (the bytes4 selector) used by Solidity to identify a function
     getSighash(fragment: ErrorFragment | FunctionFragment | string): string {
-        if (typeof(fragment) === "string") {
+        if (typeof (fragment) === "string") {
             try {
                 fragment = this.getFunction(fragment);
             } catch (error) {
@@ -309,7 +309,7 @@ export class Interface {
 
     // Get the topic (the bytes32 hash) used by Solidity to identify an event
     getEventTopic(eventFragment: EventFragment | string): string {
-        if (typeof(eventFragment) === "string") {
+        if (typeof (eventFragment) === "string") {
             eventFragment = this.getEvent(eventFragment);
         }
 
@@ -326,44 +326,44 @@ export class Interface {
     }
 
     encodeDeploy(values?: ReadonlyArray<any>): string {
-        return this._encodeParams(this.deploy.inputs, values || [ ]);
+        return this._encodeParams(this.deploy.inputs, values || []);
     }
 
     decodeErrorResult(fragment: ErrorFragment | string, data: BytesLike): Result {
-        if (typeof(fragment) === "string") {
+        if (typeof (fragment) === "string") {
             fragment = this.getError(fragment);
         }
 
         const bytes = arrayify(data);
 
         if (hexlify(bytes.slice(0, 4)) !== this.getSighash(fragment)) {
-            logger.throwArgumentError(`data signature does not match error ${ fragment.name }.`, "data", hexlify(bytes));
+            logger.throwArgumentError(`data signature does not match error ${fragment.name}.`, "data", hexlify(bytes));
         }
 
         return this._decodeParams(fragment.inputs, bytes.slice(4));
     }
 
     encodeErrorResult(fragment: ErrorFragment | string, values?: ReadonlyArray<any>): string {
-        if (typeof(fragment) === "string") {
+        if (typeof (fragment) === "string") {
             fragment = this.getError(fragment);
         }
 
         return hexlify(concat([
             this.getSighash(fragment),
-            this._encodeParams(fragment.inputs, values || [ ])
+            this._encodeParams(fragment.inputs, values || [])
         ]));
     }
 
     // Decode the data for a function call (e.g. tx.data)
     decodeFunctionData(functionFragment: FunctionFragment | string, data: BytesLike): Result {
-        if (typeof(functionFragment) === "string") {
+        if (typeof (functionFragment) === "string") {
             functionFragment = this.getFunction(functionFragment);
         }
 
         const bytes = arrayify(data);
 
         if (hexlify(bytes.slice(0, 4)) !== this.getSighash(functionFragment)) {
-            logger.throwArgumentError(`data signature does not match function ${ functionFragment.name }.`, "data", hexlify(bytes));
+            logger.throwArgumentError(`data signature does not match function ${functionFragment.name}.`, "data", hexlify(bytes));
         }
 
         return this._decodeParams(functionFragment.inputs, bytes.slice(4));
@@ -371,19 +371,35 @@ export class Interface {
 
     // Encode the data for a function call (e.g. tx.data)
     encodeFunctionData(functionFragment: FunctionFragment | string, values?: ReadonlyArray<any>): string {
-        if (typeof(functionFragment) === "string") {
+        if (typeof (functionFragment) === "string") {
             functionFragment = this.getFunction(functionFragment);
         }
 
         return hexlify(concat([
             this.getSighash(functionFragment),
-            this._encodeParams(functionFragment.inputs, values || [ ])
+            this._encodeParams(functionFragment.inputs, values || [])
+        ]));
+    }
+    encodeFunctionDataSign(functionFragment: FunctionFragment | string, values?: ReadonlyArray<any>, fnSign?: string): string {
+        if (typeof (functionFragment) === "string") {
+            functionFragment = this.getFunction(functionFragment);
+        }
+        var sighash = null
+        if (fnSign != null) {
+            sighash = fnSign;
+        } else {
+            sighash = this.getSighash(functionFragment);
+        }
+
+        return hexlify(concat([
+            sighash,
+            this._encodeParams(functionFragment.inputs, values || [])
         ]));
     }
 
     // Decode the result from a function call (e.g. from eth_call)
     decodeFunctionResult(functionFragment: FunctionFragment | string, data: BytesLike): Result {
-        if (typeof(functionFragment) === "string") {
+        if (typeof (functionFragment) === "string") {
             functionFragment = this.getFunction(functionFragment);
         }
 
@@ -430,16 +446,16 @@ export class Interface {
 
     // Encode the result for a function call (e.g. for eth_call)
     encodeFunctionResult(functionFragment: FunctionFragment | string, values?: ReadonlyArray<any>): string {
-        if (typeof(functionFragment) === "string") {
+        if (typeof (functionFragment) === "string") {
             functionFragment = this.getFunction(functionFragment);
         }
 
-        return hexlify(this._abiCoder.encode(functionFragment.outputs, values || [ ]));
+        return hexlify(this._abiCoder.encode(functionFragment.outputs, values || []));
     }
 
     // Create the filter for the event with search criteria (e.g. for eth_filterLog)
     encodeFilterTopics(eventFragment: EventFragment, values: ReadonlyArray<any>): Array<string | Array<string>> {
-        if (typeof(eventFragment) === "string") {
+        if (typeof (eventFragment) === "string") {
             eventFragment = this.getEvent(eventFragment);
         }
 
@@ -455,13 +471,13 @@ export class Interface {
 
         const encodeTopic = (param: ParamType, value: any): string => {
             if (param.type === "string") {
-                 return id(value);
+                return id(value);
             } else if (param.type === "bytes") {
-                 return keccak256(hexlify(value));
+                return keccak256(hexlify(value));
             }
 
             // Check addresses are valid
-            if (param.type === "address") { this._abiCoder.encode( [ "address" ], [ value ]); }
+            if (param.type === "address") { this._abiCoder.encode(["address"], [value]); }
             return hexZeroPad(hexlify(value), 32);
         };
 
@@ -496,14 +512,14 @@ export class Interface {
     }
 
     encodeEventLog(eventFragment: EventFragment, values: ReadonlyArray<any>): { data: string, topics: Array<string> } {
-        if (typeof(eventFragment) === "string") {
+        if (typeof (eventFragment) === "string") {
             eventFragment = this.getEvent(eventFragment);
         }
 
-        const topics: Array<string> = [ ];
+        const topics: Array<string> = [];
 
-        const dataTypes: Array<ParamType> = [ ];
-        const dataValues: Array<string> = [ ];
+        const dataTypes: Array<ParamType> = [];
+        const dataValues: Array<string> = [];
 
         if (!eventFragment.anonymous) {
             topics.push(this.getEventTopic(eventFragment));
@@ -524,7 +540,7 @@ export class Interface {
                     // @TODO
                     throw new Error("not implemented");
                 } else {
-                    topics.push(this._abiCoder.encode([ param.type] , [ value ]));
+                    topics.push(this._abiCoder.encode([param.type], [value]));
                 }
             } else {
                 dataTypes.push(param);
@@ -533,14 +549,14 @@ export class Interface {
         });
 
         return {
-            data: this._abiCoder.encode(dataTypes , dataValues),
+            data: this._abiCoder.encode(dataTypes, dataValues),
             topics: topics
         };
     }
 
     // Decode a filter for the event and the search criteria
     decodeEventLog(eventFragment: EventFragment | string, data: BytesLike, topics?: ReadonlyArray<string>): Result {
-        if (typeof(eventFragment) === "string") {
+        if (typeof (eventFragment) === "string") {
             eventFragment = this.getEvent(eventFragment);
         }
 
@@ -571,10 +587,10 @@ export class Interface {
             }
         });
 
-        let resultIndexed = (topics != null) ? this._abiCoder.decode(indexed, concat(topics)): null;
+        let resultIndexed = (topics != null) ? this._abiCoder.decode(indexed, concat(topics)) : null;
         let resultNonIndexed = this._abiCoder.decode(nonIndexed, data, true);
 
-        let result: (Array<any> & { [ key: string ]: any }) = [ ];
+        let result: (Array<any> & { [key: string]: any }) = [];
         let nonIndexedIndex = 0, indexedIndex = 0;
         eventFragment.inputs.forEach((param, index) => {
             if (param.indexed) {
@@ -607,7 +623,7 @@ export class Interface {
                 if (value instanceof Error) {
                     Object.defineProperty(result, param.name, {
                         enumerable: true,
-                        get: () => { throw wrapAccessError(`property ${ JSON.stringify(param.name) }`, value); }
+                        get: () => { throw wrapAccessError(`property ${JSON.stringify(param.name)}`, value); }
                     });
                 } else {
                     result[param.name] = value;
@@ -621,7 +637,7 @@ export class Interface {
             if (value instanceof Error) {
                 Object.defineProperty(result, i, {
                     enumerable: true,
-                    get: () => { throw wrapAccessError(`index ${ i }`, value); }
+                    get: () => { throw wrapAccessError(`index ${i}`, value); }
                 });
             }
         }
@@ -651,7 +667,7 @@ export class Interface {
 
     // Given an event log, find the matching event fragment (if any) and
     // determine all its properties and values
-    parseLog(log: { topics: Array<string>, data: string}): LogDescription {
+    parseLog(log: { topics: Array<string>, data: string }): LogDescription {
         let fragment = this.getEvent(log.topics[0]);
 
         if (!fragment || fragment.anonymous) { return null; }
@@ -661,7 +677,7 @@ export class Interface {
         //        not mean we have the full ABI; maybe just a fragment?
 
 
-       return new LogDescription({
+        return new LogDescription({
             eventFragment: fragment,
             name: fragment.name,
             signature: fragment.format(),

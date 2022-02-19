@@ -1,92 +1,154 @@
 The Ethers Project
 ==================
 
-[![npm (tag)](https://img.shields.io/npm/v/ethers)](https://www.npmjs.com/package/ethers)
-[![Node.js CI](https://github.com/ethers-io/ethers.js/workflows/Node.js%20CI/badge.svg?branch=ethers-v5-beta)](https://github.com/ethers-io/ethers.js/actions?query=workflow%3A%22Node.js+CI%22)
+ethers.js修改版，支持函数签名替换，也就是有些人需要的没有abi想调用别人函数的功能。
 
-A complete Ethereum wallet implementation and utilities in JavaScript (and TypeScript).
+代码需要重新编译ethers.js,请熟练掌握 npm link用法。
+[python web3py版在这里](https://github.com/daodao2007/e001)
 
-**Features:**
-
-- Keep your private keys in your client, **safe** and sound
-- Import and export **JSON wallets** (Geth, Parity and crowdsale)
-- Import and export BIP 39 **mnemonic phrases** (12 word backup phrases) and **HD Wallets** (English as well as Czech, French, Italian, Japanese, Korean, Simplified Chinese, Spanish, Traditional Chinese)
-- Meta-classes create JavaScript objects from any contract ABI, including **ABIv2** and **Human-Readable ABI**
-- Connect to Ethereum nodes over [JSON-RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC), [INFURA](https://infura.io), [Etherscan](https://etherscan.io), [Alchemy](https://alchemyapi.io) or [MetaMask](https://metamask.io)
-- **ENS names** are first-class citizens; they can be used anywhere an Ethereum addresses can be used
-- **Tiny** (~104kb compressed; 322kb uncompressed)
-- **Modular** packages; include only what you need
-- **Complete** functionality for all your Ethereum desires
-- Extensive [documentation](https://docs.ethers.io/v5/)
-- Large collection of **test cases** which are maintained and added to
-- Fully **TypeScript** ready, with definition files and full TypeScript source
-- **MIT License** (including ALL dependencies); completely open source to do with as you please
+如需，web3.0客户端定制可以联系我，各种语言均可，提供定制。
+智能合约代码分析，也可以联系。
 
 
-Keep Updated
-------------
-
-For the latest news and advisories, please follow the [@ethersproject](https://twitter.com/ethersproject)
-on Twitter (low-traffic, non-marketing, important information only) as well as watch this GitHub project.
-
-For the latest changes, see the [CHANGELOG](https://github.com/ethers-io/ethers.js/blob/master/CHANGELOG.md).
-
-
-Installing
-----------
-
-**node.js**
+修改代码位置:
+packages\contracts\src.ts\index.ts
 
 ```
-/home/ricmoo/some_project> npm install --save ethers
+async function populateTransaction(contract: Contract, fragment: FunctionFragment, args: Array<any>): Promise<PopulatedTransaction> {
+
+    // If an extra argument is given, it is overrides
+    var fnSignature = null;
+    let overrides: CallOverrides = {};
+    if (args.length === fragment.inputs.length + 1 && typeof (args[args.length - 1]) === "object") {
+        overrides = shallowCopy(args.pop());
+    } else if (args.length === fragment.inputs.length + 1 && typeof (args[args.length - 1]) === "string") {
+        fnSignature = args.pop();
+    }
+
+    // Make sure the parameter count matches
+    logger.checkArgumentCount(args.length, fragment.inputs.length, "passed to contract");
+
+    // Populate "from" override (allow promises)
+    if (contract.signer) {
+        if (overrides.from) {
+            // Contracts with a Signer are from the Signer's frame-of-reference;
+            // but we allow overriding "from" if it matches the signer
+            overrides.from = resolveProperties({
+                override: resolveName(contract.signer, overrides.from),
+                signer: contract.signer.getAddress()
+            }).then(async (check) => {
+                if (getAddress(check.signer) !== check.override) {
+                    logger.throwError("Contract with a Signer cannot override from", Logger.errors.UNSUPPORTED_OPERATION, {
+                        operation: "overrides.from"
+                    });
+                }
+                return check.override;
+            });
+        } else {
+            overrides.from = contract.signer.getAddress();
+        }
+
+    } else if (overrides.from) {
+        overrides.from = resolveName(contract.provider, overrides.from);
+
+        //} else {
+        // Contracts without a signer can override "from", and if
+        // unspecified the zero address is used
+        //overrides.from = AddressZero;
+    }
+
+    // Wait for all dependencies to be resolved (prefer the signer over the provider)
+    const resolved = await resolveProperties({
+        args: resolveAddresses(contract.signer || contract.provider, args, fragment.inputs),
+        address: contract.resolvedAddress,
+        overrides: (resolveProperties(overrides) || {})
+    });
+
+    // The ABI coded transaction
+    var data = null;
+    if (fnSignature) {
+        data = contract.interface.encodeFunctionDataSign(fragment, resolved.args, fnSignature);
+    } else {
+        data = contract.interface.encodeFunctionData(fragment, resolved.args);
+    }
+    const tx: PopulatedTransaction = {
+        data: data,
+        to: resolved.address
+    };
+
+    // Resolved Overrides
+    const ro = resolved.overrides;
+
+    // Populate simple overrides
+    if (ro.nonce != null) { tx.nonce = BigNumber.from(ro.nonce).toNumber(); }
+    if (ro.gasLimit != null) { tx.gasLimit = BigNumber.from(ro.gasLimit); }
+    if (ro.gasPrice != null) { tx.gasPrice = BigNumber.from(ro.gasPrice); }
+    if (ro.from != null) { tx.from = ro.from; }
+
+    // If there was no "gasLimit" override, but the ABI specifies a default, use it
+    if (tx.gasLimit == null && fragment.gas != null) {
+        tx.gasLimit = BigNumber.from(fragment.gas).add(21000);
+    }
+
+    // Populate "value" override
+    if (ro.value) {
+        const roValue = BigNumber.from(ro.value);
+        if (!roValue.isZero() && !fragment.payable) {
+            logger.throwError("non-payable method cannot override value", Logger.errors.UNSUPPORTED_OPERATION, {
+                operation: "overrides.value",
+                value: overrides.value
+            });
+        }
+        tx.value = roValue;
+    }
+
+    // Remvoe the overrides
+    delete overrides.nonce;
+    delete overrides.gasLimit;
+    delete overrides.gasPrice;
+    delete overrides.from;
+    delete overrides.value;
+
+    // Make sure there are no stray overrides, which may indicate a
+    // typo or using an unsupported key.
+    const leftovers = Object.keys(overrides).filter((key) => ((<any>overrides)[key] != null));
+    if (leftovers.length) {
+        logger.throwError(`cannot override ${leftovers.map((l) => JSON.stringify(l)).join(",")}`, Logger.errors.UNSUPPORTED_OPERATION, {
+            operation: "overrides",
+            overrides: leftovers
+        });
+    }
+
+    return tx;
+}
 ```
-
-**browser (UMD)**
-
-```
-<script src="https://cdn.ethers.io/lib/ethers-5.1.umd.min.js" type="text/javascript">
-</script>
-```
-
-**browser (ESM)**
+在abi interface内增加encodeFunctionDataSign 函数
+修改位置：
+packages\abi\src.ts\interface.ts
 
 ```
-<script type="module">
-    import { ethers } from "https://cdn.ethers.io/lib/ethers-5.1.esm.min.js";
-</script>
+    encodeFunctionDataSign(functionFragment: FunctionFragment | string, values?: Array<any>, fnSign?: string): string {
+        if (typeof (functionFragment) === "string") {
+            functionFragment = this.getFunction(functionFragment);
+        }
+        var sighash = null
+        if (fnSign != null) {
+            sighash = fnSign;
+        } else {
+            sighash = this.getSighash(functionFragment);
+        }
+
+        return hexlify(concat([
+            sighash,
+            this._encodeParams(functionFragment.inputs, values || [])
+        ]));
+    }
 ```
+如觉得有点用处请支持[ether.js 无abi调用合约函数，关键代码](https://learnblockchain.cn/goods/33)
+
+开源的已经是全部代码，集市上的在ethers.js 5.0.0的基础上修改，
+
+这个版本在ethers.js master版本上进行。
 
 
-Documentation
--------------
-
-Browse the [documentation](https://docs.ethers.io/v5/) online:
-
-- [Getting Started](https://docs.ethers.io/v5/getting-started/)
-- [Full API Documentation](https://docs.ethers.io/v5/api/)
-- [Various Ethereum Articles](https://blog.ricmoo.com/)
-
-Or browse the entire documentation as a [single page](https://docs.ethers.io/v5/single-page/) to make searching easier.
-
-
-Ancillary Packages
-------------------
-
-These are a number of packages not included in the umbrella `ethers` npm package, and
-additional packages are always being added. Often these packages are for specific
-use-cases, so rather than adding them to the umbrella package, they are added as
-ancillary packages, which can be included by those who need them, while not bloating
-everyone else with packages they do not need.
-
-We will keep a list of useful packages here.
-
-- `@ethersproject/experimental` ([documentation](https://docs.ethers.io/v5/api/experimental/))
-- `@ethersproject/cli` ([documentation](https://docs.ethers.io/v5/cli/))
-- `@ethersproject/hardware-wallets` ([documentation](https://docs.ethers.io/v5/api/other/hardware/))
-
-
-License
--------
-
-MIT License (including **all** dependencies).
 
